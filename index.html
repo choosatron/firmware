@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Choosatron Firmware</title>
+<style>
+:root {
+    --bg: #0f172a; --bg-2: #1e1b4b; --panel: rgba(30, 41, 59, 0.72);
+    --line: rgba(255, 255, 255, 0.08); --text: #f1f5f9; --dim: #94a3b8;
+    --accent: #60a5fa; --ok: #22c55e; --warn: #f59e0b;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0; padding: 0 1em 4em;
+    font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+    background: linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 100%);
+    background-attachment: fixed; color: var(--text); min-height: 100vh; line-height: 1.6;
+}
+main { max-width: 680px; margin: 0 auto; }
+header { text-align: center; padding: 3em 0 1em; }
+h1 { margin: 0; font-size: 1.9em; letter-spacing: 3px; text-transform: uppercase; }
+.sub { color: var(--dim); margin-top: 0.4em; }
+.card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 1.4em 1.5em; margin: 1.2em 0;
+}
+h2 { margin: 0 0 0.6em; font-size: 1.15em; color: var(--accent); }
+.ver {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 1.5em; font-weight: 600;
+}
+.chan {
+    display: inline-block; font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px;
+    padding: 0.15em 0.6em; border-radius: 999px; vertical-align: middle; margin-left: 0.5em;
+    background: rgba(96, 165, 250, 0.2); color: var(--accent);
+}
+.chan.beta { background: rgba(245, 158, 11, 0.2); color: var(--warn); }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3em 1.2em; margin: 1em 0 0; }
+dt { color: var(--dim); }
+dd { margin: 0; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.9em; word-break: break-all; }
+a { color: var(--accent); }
+.dim { color: var(--dim); }
+.note {
+    border-left: 3px solid var(--accent); padding-left: 0.9em; margin: 1.2em 0; color: var(--dim);
+}
+code {
+    background: rgba(255,255,255,0.06); padding: 0.1em 0.4em; border-radius: 4px;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.9em;
+}
+footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3em; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+   <h1>Choosatron</h1>
+   <div class="sub">Firmware releases</div>
+</header>
+
+<div class="card">
+   <h2>Latest</h2>
+   <div id="releases">Loading&hellip;</div>
+</div>
+
+<div class="card">
+   <h2>Updating a Choosatron</h2>
+   <p>You should not need anything on this page. Connect to the device's Wi-Fi, open its
+      web interface, and go to <strong>Firmware</strong> &mdash; it checks here by itself
+      and installs with one press.</p>
+   <p class="dim">Stories, playlists and Wi-Fi settings are kept across an update. If a new
+      version does not start correctly, the device returns to the previous one on its own.</p>
+</div>
+
+<div class="card">
+   <h2>Installing over USB</h2>
+   <p>For a device that cannot be reached over Wi-Fi, or one that needs recovering, each
+      release includes <code>choosatron-factory.bin</code> &mdash; bootloader, partition
+      table and application merged into a single image.</p>
+   <pre style="overflow-x:auto"><code>esptool.py --chip esp32s3 write_flash 0x0 choosatron-factory.bin</code></pre>
+   <p class="dim">This rewrites the whole flash, including the partition table. Stories on
+      the device are erased.</p>
+</div>
+
+<div class="note">
+   <strong>For tooling:</strong> the machine-readable index is
+   <a href="manifest.json">manifest.json</a>. Point update checks at that, served from this
+   Pages site &mdash; GitHub release-asset URLs are served without CORS headers and cannot be
+   read by a browser.
+</div>
+
+<footer>
+   Source is maintained separately &middot; this repository holds published artifacts only.
+</footer>
+
+</main>
+
+<script>
+'use strict';
+(function () {
+   var el = document.getElementById('releases');
+
+   function esc(s) {
+      return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) {
+         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+   }
+
+   function bytes(n) {
+      if (typeof n !== 'number') return '—';
+      var u = ['B', 'KB', 'MB'], i = 0;
+      while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+      return (i === 0 ? n : n.toFixed(1)) + ' ' + u[i];
+   }
+
+   function render(entry, channel) {
+      var notes = entry.notes ? '<p>' + esc(entry.notes) + '</p>' : '';
+      var more = entry.notes_url
+         ? '<p><a href="' + esc(entry.notes_url) + '">Release notes &rarr;</a></p>' : '';
+      return '<div style="margin-bottom:1.6em">' +
+         '<div class="ver">' + esc(entry.version) +
+            '<span class="chan ' + (channel === 'beta' ? 'beta' : '') + '">' + esc(channel) + '</span></div>' +
+         notes + more +
+         '<dl>' +
+            '<dt>Released</dt><dd>' + esc(entry.released || '—') + '</dd>' +
+            '<dt>Size</dt><dd>' + bytes(entry.size) + '</dd>' +
+            '<dt>SHA-256</dt><dd>' + esc(entry.sha256 || '—') + '</dd>' +
+            '<dt>Download</dt><dd><a href="' + esc(entry.url) + '">choosatron.bin</a></dd>' +
+         '</dl></div>';
+   }
+
+   fetch('manifest.json', { cache: 'no-store' })
+      .then(function (r) {
+         if (!r.ok) throw new Error('manifest.json returned HTTP ' + r.status);
+         return r.json();
+      })
+      .then(function (m) {
+         var channels = (m && m.channels) || {};
+         var names = Object.keys(channels);
+         if (!names.length) {
+            el.innerHTML = '<p class="dim">No firmware has been published yet. ' +
+               'A Choosatron checking for updates will simply report that it is up to date.</p>';
+            return;
+         }
+         // stable first, then anything else.
+         names.sort(function (a, b) { return a === 'stable' ? -1 : b === 'stable' ? 1 : a < b ? -1 : 1; });
+         el.innerHTML = names.map(function (n) { return render(channels[n], n); }).join('');
+      })
+      .catch(function (e) {
+         el.innerHTML = '<p class="dim">Could not read manifest.json: ' + esc(e.message) + '</p>';
+      });
+})();
+</script>
+</body>
+</html>

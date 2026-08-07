@@ -1,0 +1,8 @@
+# Serve this site's files exactly as committed.
+#
+# Without this file GitHub Pages runs everything through Jekyll, which skips
+# paths beginning with "_" or "." and adds a build step this site has no use for
+# - it is a manifest, some firmware binaries and one static page.
+#
+# GitHub only checks that this file EXISTS; the contents are ignored. The text
+# is here so it does not look like stray cruft and get tidied away.

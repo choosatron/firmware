@@ -1,0 +1,84 @@
+### This repository, specifically
+
+# NEVER commit a signing key here. This repository is PUBLIC, and the firmware
+# signing key is the trust anchor for every device in the field: a Choosatron
+# running signed firmware accepts an update only if it is signed with the SAME
+# key. Leaking it means anyone can sign firmware that every device will install,
+# and there is no revoking it - recovery would mean shipping a bridge release
+# signed with both the old and new keys, then physically reflashing anything
+# that missed it.
+#
+# The key belongs in the private source repo (gitignored there too) and in CI as
+# the FIRMWARE_SIGNING_KEY secret. Nowhere else.
+#
+# If a PUBLIC verification key is ever published here so people can check
+# signatures themselves, add it deliberately with `git add -f`. That is the one
+# legitimate exception, and making it explicit is the point.
+*.pem
+*.key
+*_signing_key*
+id_rsa*
+
+# DO NOT add *.bin, *.img or "build artifacts" to this file. Publishing firmware
+# images IS the purpose of this repository. Ignoring them would fail silently:
+# manifest.json would keep announcing versions whose URLs return 404, and the
+# first sign of trouble would be a device in the field failing to update.
+
+### macOS
+# Finder metadata
+.DS_Store
+
+# Thumbnails
+._*
+
+# Custom folder icons
+Icon
+
+# Volume root files
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+### Python
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# dotenv environment variable files
+.env
+
+# Virtual environments
+.venv
+env/
+venv/
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.pytest_cache/
+
+# Type checkers
+.mypy_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+# .python-version
