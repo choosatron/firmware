@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 
 SITE_BASE = "https://choosatron.github.io/firmware"
@@ -82,6 +83,39 @@ def read_app_descriptor(path):
         return raw.split(b"\0")[0].decode("utf-8", "replace")
 
     return {"version": field(16, 32), "project": field(48, 32)}
+
+
+def image_signing_keys(path):
+    """Short fingerprints of the keys an image is signed with, read FROM the image.
+
+    Derived rather than passed in on purpose: a hand-supplied value can drift
+    from reality, and the one thing this field is for is letting the update page
+    say "this device would refuse that build" before a two-minute upload. A wrong
+    value is worse than an absent one.
+
+    Returns [] when espsecure is unavailable, which is not fatal - the device
+    still verifies the signature for itself. This is an early warning, not the
+    security control.
+    """
+    # Absolute: sourcing export.sh runs in a subshell whose working directory is
+    # not guaranteed to be ours, and a relative path silently resolves elsewhere.
+    path = os.path.abspath(path)
+    idf = os.environ.get("IDF_PATH", os.path.expanduser("~/.espressif/v5.4.4/esp-idf"))
+    export = os.path.join(idf, "export.sh")
+    cmd = f'espsecure.py signature_info_v2 "{path}"'
+    if os.path.isfile(export):
+        cmd = f'. "{export}" > /dev/null 2>&1; ' + cmd
+    r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True)
+    if r.returncode != 0:
+        return []
+
+    keys = []
+    for line in (r.stdout or "").splitlines():
+        m = re.search(r"Public key digest for block \d+:\s*([0-9a-fA-F ]+)", line)
+        if m:
+            octets = m.group(1).split()
+            keys.append("".join(octets[:4]).lower())
+    return keys
 
 
 def main():
@@ -187,6 +221,13 @@ def main():
     }
     if args.notes_url:
         entry["notes_url"] = args.notes_url
+
+    signed_by = image_signing_keys(ota_bin)
+    if signed_by:
+        entry["signed_by"] = signed_by
+    else:
+        print("  note: could not read the image's signing keys (espsecure unavailable);")
+        print("        'signed_by' omitted. The device still verifies the signature itself.")
 
     previous = manifest["channels"].get(args.channel)
     manifest["channels"][args.channel] = entry
