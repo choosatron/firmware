@@ -48,6 +48,11 @@ code {
     background: rgba(255,255,255,0.06); padding: 0.1em 0.4em; border-radius: 4px;
     font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.9em;
 }
+select {
+    width: 100%; padding: 0.55em 0.7em; border-radius: 8px; border: 1px solid var(--line);
+    background: rgba(15, 23, 42, 0.8); color: var(--text); font-size: 1em;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
 footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3em; }
 </style>
 </head>
@@ -65,6 +70,11 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
 </div>
 
 <div class="card">
+   <h2>All releases</h2>
+   <div id="history">Loading&hellip;</div>
+</div>
+
+<div class="card">
    <h2>Updating a Choosatron</h2>
    <p>You should not need anything on this page. Connect to the device's Wi-Fi, open its
       web interface, and go to <strong>Firmware</strong> &mdash; it checks here by itself
@@ -76,12 +86,13 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
 <div class="card">
    <h2>Installing over USB</h2>
    <p>For a device that cannot be reached over Wi-Fi, or one that needs recovering, each
-      release includes a <code>choosatron-factory.bin</code> for each board &mdash;
-      bootloader, partition table and application merged into a single image. Use the one for
-      your board: an image for the other board leaves the buttons and printer dead.</p>
+      release includes a recovery image, <code>choosatron-factory.bin</code>: the
+      bootloader, partition table and application in one file, written at the start of the
+      flash.</p>
    <pre style="overflow-x:auto"><code>esptool.py --chip esp32s3 write_flash 0x0 choosatron-factory.bin</code></pre>
-   <p class="dim">This rewrites the whole flash, including the partition table. Stories on
-      the device are erased.</p>
+   <p class="dim">The recovery image keeps the stories and playlists. It resets the settings,
+      Wi-Fi included, to how they were when the device was new, so afterwards the device
+      comes up as its own open network again.</p>
 </div>
 
 <div class="note">
@@ -122,9 +133,13 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
             '<dt>Update image</dt><dd><a href="' + esc(b.url) + '">choosatron.bin</a> &middot; ' +
                bytes(b.size) + '</dd>' +
             '<dt>SHA-256</dt><dd>' + esc(b.sha256 || '—') + '</dd>' +
-            (b.factory_url ? '<dt>USB image</dt><dd><a href="' + esc(b.factory_url) +
+            (b.factory_url ? '<dt>Recovery image</dt><dd><a href="' + esc(b.factory_url) +
                '">choosatron-factory.bin</a> &middot; ' + bytes(b.factory_size) + '</dd>' : '') +
          '</dl>';
+   }
+
+   function chanBadge(channel) {
+      return '<span class="chan ' + (channel === 'beta' ? 'beta' : '') + '">' + esc(channel) + '</span>';
    }
 
    function render(entry, channel) {
@@ -134,18 +149,22 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
       var boards = entry.boards || {};
       return '<div style="margin-bottom:1.6em">' +
          '<div class="ver">' + esc(entry.version) +
-            '<span class="chan ' + (channel === 'beta' ? 'beta' : '') + '">' + esc(channel) + '</span></div>' +
+            chanBadge(channel) + '</div>' +
          notes + more +
          '<dl><dt>Released</dt><dd>' + esc(entry.released || '—') + '</dd></dl>' +
          Object.keys(boards).sort().map(function (n) { return renderBoard(n, boards[n]); }).join('') +
          '</div>';
    }
 
-   fetch('manifest.json', { cache: 'no-store' })
-      .then(function (r) {
-         if (!r.ok) throw new Error('manifest.json returned HTTP ' + r.status);
+   function getJson(name) {
+      return fetch(name, { cache: 'no-store' }).then(function (r) {
+         if (r.status === 404) return null;
+         if (!r.ok) throw new Error(name + ' returned HTTP ' + r.status);
          return r.json();
-      })
+      });
+   }
+
+   getJson('manifest.json')
       .then(function (m) {
          var channels = (m && m.channels) || {};
          var names = Object.keys(channels);
@@ -160,6 +179,34 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
       })
       .catch(function (e) {
          el.innerHTML = '<p class="dim">Could not read manifest.json: ' + esc(e.message) + '</p>';
+      });
+
+   // Every published version, newest first, written by the release tooling.
+   var hist = document.getElementById('history');
+   getJson('releases.json')
+      .then(function (h) {
+         var list = (h && h.releases) || [];
+         if (!list.length) {
+            hist.innerHTML = '<p class="dim">No releases yet.</p>';
+            return;
+         }
+         var opts = list.map(function (r, i) {
+            return '<option value="' + i + '">' + esc(r.version) + ' \u2014 ' + esc(r.channel) +
+               (r.released ? ', ' + esc(r.released) : '') + (i === 0 ? ' (newest)' : '') + '</option>';
+         }).join('');
+         hist.innerHTML = '<label class="dim" for="pick">Version</label>' +
+            '<select id="pick">' + opts + '</select><div id="picked"></div>';
+         var pick = document.getElementById('pick');
+         var out = document.getElementById('picked');
+         function show() {
+            var r = list[+pick.value];
+            out.innerHTML = '<div style="margin-top:1.2em">' + render(r, r.channel) + '</div>';
+         }
+         pick.addEventListener('change', show);
+         show();
+      })
+      .catch(function (e) {
+         hist.innerHTML = '<p class="dim">Could not read releases.json: ' + esc(e.message) + '</p>';
       });
 })();
 </script>
