@@ -76,8 +76,9 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
 <div class="card">
    <h2>Installing over USB</h2>
    <p>For a device that cannot be reached over Wi-Fi, or one that needs recovering, each
-      release includes <code>choosatron-factory.bin</code> &mdash; bootloader, partition
-      table and application merged into a single image.</p>
+      release includes a <code>choosatron-factory.bin</code> for each board &mdash;
+      bootloader, partition table and application merged into a single image. Use the one for
+      your board: an image for the other board leaves the buttons and printer dead.</p>
    <pre style="overflow-x:auto"><code>esptool.py --chip esp32s3 write_flash 0x0 choosatron-factory.bin</code></pre>
    <p class="dim">This rewrites the whole flash, including the partition table. Stories on
       the device are erased.</p>
@@ -114,20 +115,30 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
       return (i === 0 ? n : n.toFixed(1)) + ' ' + u[i];
    }
 
+   // Schema 2: one release per channel, an image per board under `boards`.
+   function renderBoard(name, b) {
+      return '<dl>' +
+            '<dt>Board</dt><dd><strong>' + esc(name) + '</strong></dd>' +
+            '<dt>Update image</dt><dd><a href="' + esc(b.url) + '">choosatron.bin</a> &middot; ' +
+               bytes(b.size) + '</dd>' +
+            '<dt>SHA-256</dt><dd>' + esc(b.sha256 || '—') + '</dd>' +
+            (b.factory_url ? '<dt>USB image</dt><dd><a href="' + esc(b.factory_url) +
+               '">choosatron-factory.bin</a> &middot; ' + bytes(b.factory_size) + '</dd>' : '') +
+         '</dl>';
+   }
+
    function render(entry, channel) {
       var notes = entry.notes ? '<p>' + esc(entry.notes) + '</p>' : '';
       var more = entry.notes_url
          ? '<p><a href="' + esc(entry.notes_url) + '">Release notes &rarr;</a></p>' : '';
+      var boards = entry.boards || {};
       return '<div style="margin-bottom:1.6em">' +
          '<div class="ver">' + esc(entry.version) +
             '<span class="chan ' + (channel === 'beta' ? 'beta' : '') + '">' + esc(channel) + '</span></div>' +
          notes + more +
-         '<dl>' +
-            '<dt>Released</dt><dd>' + esc(entry.released || '—') + '</dd>' +
-            '<dt>Size</dt><dd>' + bytes(entry.size) + '</dd>' +
-            '<dt>SHA-256</dt><dd>' + esc(entry.sha256 || '—') + '</dd>' +
-            '<dt>Download</dt><dd><a href="' + esc(entry.url) + '">choosatron.bin</a></dd>' +
-         '</dl></div>';
+         '<dl><dt>Released</dt><dd>' + esc(entry.released || '—') + '</dd></dl>' +
+         Object.keys(boards).sort().map(function (n) { return renderBoard(n, boards[n]); }).join('') +
+         '</div>';
    }
 
    fetch('manifest.json', { cache: 'no-store' })

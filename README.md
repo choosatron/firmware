@@ -8,9 +8,9 @@ repository and its release workflow pushes here. Keeping the two apart means the
 never accumulates 1.7 MB binaries in its history, and it means these files can be public
 without the source being public.
 
-## What a Choosatron actually reads
+## What reads it
 
-Exactly one file:
+A Choosatron reads exactly one file:
 
 ```
 https://choosatron.github.io/firmware/manifest.json
@@ -23,17 +23,30 @@ Install — downloads the `.bin` it points at.
 ## Layout
 
 ```
-manifest.json          the only file that is polled; written LAST on every release
-index.html             human-readable landing page
-.nojekyll              tells Pages to serve files verbatim
-publishing/            the release tooling (see below)
+manifest.json               what the update page polls; written LAST on every release
+flasher-<board>.json        the USB flasher's fixed address for the latest stable release
+flasher-<board>-beta.json   ... and for the latest beta
+index.html                  human-readable landing page
+.nojekyll                   tells Pages to serve files verbatim
 1.1.0/
-  choosatron.bin           OTA image — this is what gets installed over the air
-  choosatron-factory.bin   merged bootloader + partition table + app, for USB recovery
+  wroom-v0.1/
+    choosatron.bin            OTA image - what gets installed over the air
+    choosatron-factory.bin    merged bootloader + partition table + app, for USB recovery
+  xiao-v0.1/
+    ...                       the same, for the XIAO board
+  flasher-<board>.json        ESP Web Tools manifest for this version
   SHA256SUMS
 1.2.0/
   ...
 ```
+
+**One image per board.** The buttons and printer are wired to different pins on the two
+boards, and the pin map is chosen when the firmware is built, so an image for one board
+leaves the other's buttons and printer dead. `<board>` is the name the firmware reports as
+`board` in `/api/v1/device/health`: `wroom-v0.1` or `xiao-v0.1`.
+
+The flasher files are read by the browser USB flasher (`choosatron.github.io/flasher/`, its
+own repository). Same origin as this site, so it fetches the images here directly.
 
 ## Three rules that are easy to get wrong
 
@@ -50,9 +63,10 @@ do not point the manifest at them.
 
 **2. Write `manifest.json` last, in its own commit.**
 
-The manifest is the file that says "this version exists". If it lands before the binary has
-finished uploading, a device that checks in that window follows a URL to a partial file. Push
-the version directory first, confirm it is live, then push the manifest.
+The manifest and the root `flasher-*.json` files are what say "this version exists". If they
+land before the binaries have finished uploading, a device or the flasher checking in that
+window follows a URL to a partial file. Push the version directory first, confirm it is live,
+then push the manifest and the flasher files together.
 
 **3. Never delete a published version directory.**
 
@@ -62,27 +76,12 @@ reproduce a bug depends on old binaries staying reachable. Pages allows 1 GB per
 
 ## Publishing a release
 
-Normally CI does this. `publishing/release.yml` is the workflow — it belongs in the **private
-source repository** at `.github/workflows/release.yml`, and is kept here so the whole recipe
-lives in one place.
-
-To publish by hand, or for the very first release:
-
-```bash
-python3 publishing/publish_release.py \
-    --version 1.1.0 \
-    --bin /path/to/build/choosatron.bin \
-    --factory-bin /path/to/build/choosatron-factory.bin \
-    --channel stable \
-    --notes "Chorded story selection, printer presence detection."
-
-git add 1.1.0 && git commit -m "Add 1.1.0 artifacts" && git push
-git add manifest.json && git commit -m "Publish 1.1.0 to stable" && git push
-```
-
-Two commits, in that order, on purpose — see rule 2. The script writes the manifest to disk
-but deliberately does not commit anything; staging it separately is what keeps the ordering
-visible.
+Nothing here is edited by hand. The release workflow in the private source repository
+(`.github/workflows/release.yml`) builds an image for each board on a version tag, verifies
+each signature, and calls `choosatron/tools/24_publish_release.py` there, which stages the
+files above and writes the announcing ones. The workflow then commits in two steps, as rule 2
+requires. The source repository's `docs/firmware-runbook.md` §3 is the procedure, including
+publishing by hand.
 
 ## Repository setup
 
@@ -113,21 +112,33 @@ reason. Do not remove that step.
 
 ## `manifest.json` format
 
+Schema 2. A channel names one release; the release carries an image per board.
+
 ```json
 {
-  "schema": 1,
-  "updated": "2026-08-07",
+  "schema": 2,
+  "updated": "2026-11-05",
   "channels": {
     "stable": {
       "version": "1.1.0",
-      "url": "https://choosatron.github.io/firmware/1.1.0/choosatron.bin",
-      "size": 1970176,
-      "sha256": "9f2c…",
-      "released": "2026-08-07",
+      "released": "2026-11-05",
       "min_version": "1.0.0",
       "critical": false,
       "notes": "One or two sentences, shown in the update panel.",
-      "notes_url": "https://github.com/choosatron/firmware/releases/tag/v1.1.0"
+      "notes_url": "https://github.com/choosatron/firmware/releases/tag/v1.1.0",
+      "boards": {
+        "wroom-v0.1": {
+          "url": "https://choosatron.github.io/firmware/1.1.0/wroom-v0.1/choosatron.bin",
+          "size": 2953216,
+          "sha256": "9f2c…",
+          "signed_by": ["3f9a1c22"],
+          "factory_url": "https://choosatron.github.io/firmware/1.1.0/wroom-v0.1/choosatron-factory.bin",
+          "factory_size": 3018752,
+          "factory_sha256": "71ab…",
+          "flasher": "https://choosatron.github.io/firmware/1.1.0/flasher-wroom-v0.1.json"
+        },
+        "xiao-v0.1": { "…": "same shape" }
+      }
     },
     "beta": { "…": "same shape" }
   }
@@ -136,14 +147,16 @@ reason. Do not remove that step.
 
 | Field | Why it exists |
 | --- | --- |
-| `schema` | Lets a future client reject a manifest it does not understand, rather than misreading it |
+| `schema` | Lets a client reject a manifest it does not understand, rather than misreading it. Firmware that reads schema 1 says it does not understand this one |
 | `version` | Compared as SemVer. Build metadata after `+` is ignored, and a `-prerelease` sorts below the release |
-| `size` | Drives the "this will take about N seconds" estimate and the device's preflight check |
-| `sha256` | Verified twice — in the browser before upload, and on the device before install |
 | `min_version` | The oldest version that may jump straight to this one. Always send it, even when it is `1.0.0` |
 | `critical` | Lets the UI mark a security fix visually. It never forces an install |
-| `notes` | Short, human, shown inline |
-| `notes_url` | "Read more" link, typically the GitHub Release page |
+| `notes`, `notes_url` | Short, human, shown inline; and a "read more" link, typically the GitHub Release |
+| `boards` | One entry per board. The update page offers only its own board's image |
+| `size` | Drives the "this will take about N seconds" estimate and the device's preflight check |
+| `sha256` | Verified twice - in the browser before upload, and on the device before install |
+| `signed_by` | Read from the image when publishing. Lets the update page refuse a build the device would reject, before uploading it |
+| `factory_*`, `flasher` | For USB recovery: the merged image, and its ESP Web Tools manifest |
 
 An empty `channels` object is valid and means "nothing published yet" — the update page says
 so rather than erroring.
