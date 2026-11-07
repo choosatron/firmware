@@ -86,10 +86,13 @@ footer { text-align: center; color: var(--dim); font-size: 0.85em; margin-top: 3
 
 <div class="card">
    <h2>Installing over USB</h2>
+   <p><strong>The easy way: the <a href="../flasher/">Choosatron flasher</a>.</strong> It
+      reinstalls or recovers a Choosatron from Chrome or Edge on a computer, with nothing to
+      install, and offers every release below.</p>
    <p>For a device that cannot be reached over Wi-Fi, or one that needs recovering, each
       release includes a recovery image, <code>choosatron-factory.bin</code>: the
       bootloader, partition table and application in one file, written at the start of the
-      flash.</p>
+      flash. To write it by hand instead:</p>
    <pre style="overflow-x:auto"><code>esptool.py --chip esp32s3 write_flash 0x0 choosatron-factory.bin</code></pre>
    <p class="dim">The recovery image keeps the stories and playlists. It resets the settings,
       Wi-Fi included, to how they were when the device was new, so afterwards the device
